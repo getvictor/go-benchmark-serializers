@@ -1,15 +1,15 @@
 package main
 
 import (
-	"bytes"
-	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
+
+	go_json "github.com/goccy/go-json"
 )
 
-func BenchmarkJSONImport(b *testing.B) {
+func BenchmarkJSON(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 
 		// Read in the file (do not time)
@@ -22,8 +22,7 @@ func BenchmarkJSONImport(b *testing.B) {
 		b.StartTimer()
 
 		var samples []Sample
-		dec := json.NewDecoder(bytes.NewReader(data))
-		if err := dec.Decode(&samples); err != nil {
+		if err := json.Unmarshal(data, &samples); err != nil {
 			b.Fatal(err)
 		}
 		if len(samples) != itemsPerFile {
@@ -32,64 +31,105 @@ func BenchmarkJSONImport(b *testing.B) {
 	}
 }
 
-func BenchmarkGobImport(b *testing.B) {
+// func BenchmarkDecode(b *testing.B) {
+// 	for i := 0; i < b.N; i++ {
+//
+// 		// Read in the file (do not time)
+// 		b.StopTimer()
+// 		fileNumber := i % files
+// 		data, err := os.ReadFile(fmt.Sprintf("testdata/sample_%d.json", fileNumber))
+// 		if err != nil {
+// 			b.Fatal(err)
+// 		}
+// 		b.StartTimer()
+//
+// 		var samples []Sample
+// 		dec := json.NewDecoder(bytes.NewReader(data))
+// 		if err := dec.Decode(&samples); err != nil {
+// 			b.Fatal(err)
+// 		}
+// 		if len(samples) != itemsPerFile {
+// 			b.Fatalf("expected %d samples, got %d", itemsPerFile, len(samples))
+// 		}
+// 	}
+// }
+
+func BenchmarkPartialJSON(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 
 		// Read in the file (do not time)
 		b.StopTimer()
 		fileNumber := i % files
-		data, err := os.ReadFile(fmt.Sprintf("testdata/sample_%d.bin", fileNumber))
+		data, err := os.ReadFile(fmt.Sprintf("testdata/sample_%d.json", fileNumber))
 		if err != nil {
 			b.Fatal(err)
 		}
 		b.StartTimer()
 
-		// decode gob
-		var samples []Sample
-		dec := gob.NewDecoder(bytes.NewReader(data))
-		if err := dec.Decode(&samples); err != nil {
+		var partials []json.RawMessage
+		if err := json.Unmarshal(data, &partials); err != nil {
 			b.Fatal(err)
 		}
-		if len(samples) != itemsPerFile {
-			b.Fatalf("expected %d samples, got %d", itemsPerFile, len(samples))
+		if len(partials) != itemsPerFile {
+			b.Fatalf("expected %d samples, got %d", itemsPerFile, len(partials))
+		}
+		var samples []Sample
+		for _, p := range partials {
+			var s Sample
+			if err := json.Unmarshal(p, &s); err != nil {
+				b.Fatal(err)
+			}
+			samples = append(samples, s)
 		}
 	}
 }
 
-func BenchmarkJSONImportFile(b *testing.B) {
+// func BenchmarkPartialDecode(b *testing.B) {
+// 	for i := 0; i < b.N; i++ {
+//
+// 		// Read in the file (do not time)
+// 		b.StopTimer()
+// 		fileNumber := i % files
+// 		data, err := os.ReadFile(fmt.Sprintf("testdata/sample_%d.json", fileNumber))
+// 		if err != nil {
+// 			b.Fatal(err)
+// 		}
+// 		b.StartTimer()
+//
+// 		var partials []json.RawMessage
+// 		dec := json.NewDecoder(bytes.NewReader(data))
+// 		if err := dec.Decode(&partials); err != nil {
+// 			b.Fatal(err)
+// 		}
+// 		if len(partials) != itemsPerFile {
+// 			b.Fatalf("expected %d samples, got %d", itemsPerFile, len(partials))
+// 		}
+// 		var samples []Sample
+// 		for _, p := range partials {
+// 			var s Sample
+// 			itemDec := json.NewDecoder(bytes.NewReader(p))
+// 			if err := itemDec.Decode(&p); err != nil {
+// 				b.Fatal(err)
+// 			}
+// 			samples = append(samples, s)
+// 		}
+// 	}
+// }
+
+func BenchmarkGoccyGoJSON(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 
+		// Read in the file (do not time)
+		b.StopTimer()
 		fileNumber := i % files
-		file, err := os.Open(fmt.Sprintf("testdata/sample_%d.json", fileNumber))
+		data, err := os.ReadFile(fmt.Sprintf("testdata/sample_%d.json", fileNumber))
 		if err != nil {
 			b.Fatal(err)
 		}
+		b.StartTimer()
 
 		var samples []Sample
-		dec := json.NewDecoder(file)
-		if err := dec.Decode(&samples); err != nil {
-			b.Fatal(err)
-		}
-		if len(samples) != itemsPerFile {
-			b.Fatalf("expected %d samples, got %d", itemsPerFile, len(samples))
-		}
-		_ = file.Close()
-	}
-}
-
-func BenchmarkGobImportFile(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-
-		fileNumber := i % files
-		file, err := os.Open(fmt.Sprintf("testdata/sample_%d.bin", fileNumber))
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		// decode gob
-		var samples []Sample
-		dec := gob.NewDecoder(file)
-		if err := dec.Decode(&samples); err != nil {
+		if err := go_json.Unmarshal(data, &samples); err != nil {
 			b.Fatal(err)
 		}
 		if len(samples) != itemsPerFile {
@@ -97,3 +137,26 @@ func BenchmarkGobImportFile(b *testing.B) {
 		}
 	}
 }
+
+// func BenchmarkGoccyGoDecode(b *testing.B) {
+// 	for i := 0; i < b.N; i++ {
+//
+// 		// Read in the file (do not time)
+// 		b.StopTimer()
+// 		fileNumber := i % files
+// 		data, err := os.ReadFile(fmt.Sprintf("testdata/sample_%d.json", fileNumber))
+// 		if err != nil {
+// 			b.Fatal(err)
+// 		}
+// 		b.StartTimer()
+//
+// 		var samples []Sample
+// 		dec := go_json.NewDecoder(bytes.NewReader(data))
+// 		if err := dec.Decode(&samples); err != nil {
+// 			b.Fatal(err)
+// 		}
+// 		if len(samples) != itemsPerFile {
+// 			b.Fatalf("expected %d samples, got %d", itemsPerFile, len(samples))
+// 		}
+// 	}
+// }
